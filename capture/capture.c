@@ -85,6 +85,8 @@ int8_t last_packet = -1;
 /* modify /boot/cmdline.txt to include spidev.bufsiz=131072 */
 
 static uint8_t rx_buf[LEP_SPI_BUFFER] = {0};
+static const unsigned int lepton_image_width = 240;
+static const unsigned int lepton_image_height = 80;
 static unsigned int lepton_image[240][80];
 
 static void save_pgm_file(void)
@@ -104,9 +106,10 @@ static void save_pgm_file(void)
             image_index = 0;
             break;
         }
-
     } while (access(image_name, F_OK) == 0);
-
+    
+    printf("Saving file %s\n", image_name);
+    
     FILE *f = fopen(image_name, "w+");
     if (f == NULL)
     {
@@ -115,10 +118,9 @@ static void save_pgm_file(void)
     }
 
     printf("Calculating min/max values for proper scaling...\n");
-    for(i = 0; i < 240; i++)
+    for(i = 0; i < lepton_image_width; i++)
     {
-        
-        for(j = 0; j < 80; j++)
+        for(j = 0; j < lepton_image_height; j++)
         {
             if (lepton_image[i][j] > maxval) {
                 maxval = lepton_image[i][j];
@@ -130,21 +132,21 @@ static void save_pgm_file(void)
     }
     printf("maxval = %u\n",maxval);
     printf("minval = %u\n",minval);
-    
+
     fprintf(f,"P2\n160 120\n%u\n",maxval-minval);
-    for(i=0; i < 240; i += 2)
+    for(i=0; i < lepton_image_width; i += 2)
     {
         /* first 80 pixels in row */
-        for(j = 0; j < 80; j++)
+        for(j = 0; j < lepton_image_height; j++)
         {
             fprintf(f,"%d ", lepton_image[i][j] - minval);
         }
 
         /* second 80 pixels in row */
-        for(j = 0; j < 80; j++)
+        for(j = 0; j < lepton_image_height; j++)
         {
             fprintf(f,"%d ", lepton_image[i + 1][j] - minval);
-        }        
+        }
         fprintf(f,"\n");
     }
     fprintf(f,"\n\n");
@@ -166,7 +168,7 @@ int transfer(int fd)
     int packet = 0;
     int state = 0;  //set to 1 when a valid segment is found
     int pixel = 0;
-    
+
     struct spi_ioc_transfer tr = {
         .tx_buf = (unsigned long)NULL,
         .rx_buf = (unsigned long)rx_buf,
@@ -174,13 +176,12 @@ int transfer(int fd)
         .delay_usecs = delay,
         .speed_hz = speed,
         .bits_per_word = bits
-    };    
-    
+    };
+
     ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
-    if (ret < 1) {
+    if (ret < 1)
         pabort("can't read spi data");
-    }
-    
+
     for(ip = 0; ip < (ret / VOSPI_FRAME_SIZE); ip++) {
         packet = ip * VOSPI_FRAME_SIZE;
 
@@ -191,15 +192,13 @@ int transfer(int fd)
         }
 
         packet_number = rx_buf[packet + 1];
-        
-        if(packet_number > 0 && state == 0) {
+
+        if(packet_number > 0 && state == 0)
             continue;
-        }
-        
-        if(state == 1 && packet_number == 0) {
+
+        if(state == 1 && packet_number == 0)
             state = 0;  //reset for new segment
-        }
-        
+
         //look for the start of a segment
         if(state == 0 && packet_number == 0 && (packet + (20 * VOSPI_FRAME_SIZE)) < ret) {
             segment = (rx_buf[packet + (20 * VOSPI_FRAME_SIZE)] & 0x70) >> 4;
@@ -209,23 +208,22 @@ int transfer(int fd)
                 printf("new segment: %x \n", segment);
             } 
         }
-        
-        if(!state) {
+
+        if(!state)
             continue;
-        }
 
         for(i = 4; i < VOSPI_FRAME_SIZE; i+=2)
         {
             pixel = packet_number + ((current_segment - 1) * 60);
             lepton_image[pixel][(i - 4) / 2] = (rx_buf[packet + i] << 8 | rx_buf[packet + (i + 1)]);
         }
-        
+
         if(packet_number == 59) {
             //set the segment status bit
             status_bits |= ( 0x01 << (current_segment - 1));
-        }        
+        }
     }
-    
+
     return status_bits;
 }
  
@@ -236,51 +234,32 @@ int main(int argc, char *argv[])
 
     fd = open(device, O_RDWR);
     if (fd < 0)
-    {
         pabort("can't open device");
-    }
 
-    ret = ioctl(fd, SPI_IOC_WR_MODE, &mode);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_WR_MODE, &mode))
         pabort("can't set spi mode");
-    }
 
-    ret = ioctl(fd, SPI_IOC_RD_MODE, &mode);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_RD_MODE, &mode))
         pabort("can't get spi mode");
-    }
 
-    ret = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits))
         pabort("can't set bits per word");
-    }
 
-    ret = ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits))
         pabort("can't get bits per word");
-    }
 
-    ret = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed))
         pabort("can't set max speed hz");
-    }
 
-    ret = ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
-    if (ret == -1)
-    {
+    if (-1 == ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed))
         pabort("can't get max speed hz");
-    }
 
     printf("spi mode: %d\n", mode);
     printf("bits per word: %d\n", bits);
     printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
 
-    while(status_bits != 0x0f) { transfer(fd); }
+    while(status_bits != 0x0f)
+        transfer(fd);
 
     close(fd);
 
