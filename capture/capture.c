@@ -101,27 +101,23 @@ static void save_pgm_file(void)
     do {
         sprintf(image_name, "images/IMG_%.4d.pgm", image_index);
         image_index += 1;
-        if (image_index > 9999) 
-        {
+        if (image_index > 9999) {
             image_index = 0;
             break;
         }
     } while (access(image_name, F_OK) == 0);
-    
+
     printf("Saving file %s\n", image_name);
-    
+
     FILE *f = fopen(image_name, "w+");
-    if (f == NULL)
-    {
+    if (f == NULL) {
         printf("Error opening file!\n");
         exit(1);
     }
 
     printf("Calculating min/max values for proper scaling...\n");
-    for(i = 0; i < lepton_image_width; i++)
-    {
-        for(j = 0; j < lepton_image_height; j++)
-        {
+    for(i = 0; i < lepton_image_width; i++) {
+        for(j = 0; j < lepton_image_height; j++) {
             if (lepton_image[i][j] > maxval) {
                 maxval = lepton_image[i][j];
             }
@@ -134,17 +130,14 @@ static void save_pgm_file(void)
     printf("minval = %u\n",minval);
 
     fprintf(f,"P2\n160 120\n%u\n",maxval-minval);
-    for(i=0; i < lepton_image_width; i += 2)
-    {
+    for(i=0; i < lepton_image_width; i += 2) {
         /* first 80 pixels in row */
-        for(j = 0; j < lepton_image_height; j++)
-        {
+        for(j = 0; j < lepton_image_height; j++) {
             fprintf(f,"%d ", lepton_image[i][j] - minval);
         }
 
         /* second 80 pixels in row */
-        for(j = 0; j < lepton_image_height; j++)
-        {
+        for(j = 0; j < lepton_image_height; j++) {
             fprintf(f,"%d ", lepton_image[i + 1][j] - minval);
         }
         fprintf(f,"\n");
@@ -212,8 +205,7 @@ int transfer(int fd)
         if(!state)
             continue;
 
-        for(i = 4; i < VOSPI_FRAME_SIZE; i+=2)
-        {
+        for(i = 4; i < VOSPI_FRAME_SIZE; i+=2) {
             pixel = packet_number + ((current_segment - 1) * 60);
             lepton_image[pixel][(i - 4) / 2] = (rx_buf[packet + i] << 8 | rx_buf[packet + (i + 1)]);
         }
@@ -258,11 +250,12 @@ int main(int argc, char *argv[])
     printf("bits per word: %d\n", bits);
     printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
 
-    while(status_bits != 0x0f)
-        transfer(fd);
-
+    for(int i=0; i<10; i++){
+        printf("IMG %d\n", i);
+        while(status_bits != 0x0f)
+            transfer(fd);
+    }
     close(fd);
-
     save_pgm_file();
 
     return ret;
