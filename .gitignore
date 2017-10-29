@@ -2,3 +2,4 @@
 *.o
 *.pgm
 lepton.js
+*.exe
