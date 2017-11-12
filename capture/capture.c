@@ -250,10 +250,8 @@ int main(int argc, char *argv[])
     printf("bits per word: %d\n", bits);
     printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
 
-    for(int i=0; i<10; i++){
-        printf("IMG %d\n", i);
-        while(status_bits != 0x0f)
-            transfer(fd);
+    while(status_bits != 0x0f){
+        transfer(fd);
     }
     close(fd);
     save_pgm_file();
